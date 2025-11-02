@@ -7,18 +7,16 @@ package gui;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.format.TextStyle;
-import java.util.Date;
 import java.util.Locale;
-import java.sql.ResultSet;
 import javax.swing.SwingUtilities;
-import model.MySQL;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.data.general.DefaultPieDataset;
+import service.SummaryService;
+import dto.SummaryDto;
 
 /**
  *
@@ -26,9 +24,7 @@ import org.jfree.data.general.DefaultPieDataset;
  */
 public class Summary extends javax.swing.JDialog {
 
-    private int invoiceCount;
-    private double income;
-    private double expence;
+    private final SummaryService summaryService;
 
     private void month() {
         LocalDate currentDate = LocalDate.now();
@@ -37,68 +33,63 @@ public class Summary extends javax.swing.JDialog {
         jTextField1.setForeground(Color.green);
     }
 
-    private void Income() {
-        Date currentDate = new Date();
-        SimpleDateFormat yearFormat = new SimpleDateFormat("yyyy-MM");
-        String month = yearFormat.format(currentDate);
-
-        try {
-            ResultSet rs = MySQL.execute("SELECT * FROM `invoice` WHERE `date_time`LIKE'" + month + "%'");
-
-            while (rs.next()) {
-                invoiceCount += 1;
-                String sum = rs.getString("paid_amount");
-                income += Double.parseDouble(sum);
+    private void loadSummaryAsync() {
+        new javax.swing.SwingWorker<SummaryDto, Void>() {
+            @Override
+            protected SummaryDto doInBackground() throws Exception {
+                return summaryService.getMonthlySummary(LocalDate.now());
             }
 
-            jTextField2.setText(String.valueOf(invoiceCount));
-            jTextField3.setText(String.valueOf(income));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void expences() {
-        Date currentDate = new Date();
-        SimpleDateFormat yearFormat = new SimpleDateFormat("yyyy-MM");
-        String month = yearFormat.format(currentDate);
-
-        try {
-            ResultSet rs = MySQL.execute("SELECT * FROM `grn` WHERE `date_time`LIKE'" + month + "%'");
-
-            while (rs.next()) {
-                String sum = rs.getString("paid_amount");
-                expence += Double.parseDouble(sum);
+            @Override
+            protected void done() {
+                try {
+                    SummaryDto summary = get();
+                    updateUI(summary);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    // Show error dialog
+                    javax.swing.JOptionPane.showMessageDialog(Summary.this,
+                        "Error loading summary: " + e.getMessage(),
+                        "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+                }
             }
-
-            jTextField4.setText(String.valueOf(expence));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        }.execute();
     }
 
-    private void profit() {
-        Double profit = (income - expence);
-        jTextField5.setText(String.valueOf(profit));
-        if (profit > 0) {
+    private void updateUI(SummaryDto summary) {
+        jTextField2.setText(String.valueOf(summary.getInvoiceCount()));
+        jTextField3.setText(summary.getIncome().toString());
+        jTextField4.setText(summary.getExpence().toString());
+        jTextField5.setText(summary.getProfit().toString());
+
+        // Set profit color
+        double profitValue = summary.getProfit().doubleValue();
+        if (profitValue > 0) {
             jTextField5.setForeground(Color.GREEN);
-        } else if (profit < 0) {
+        } else if (profitValue < 0) {
             jTextField5.setForeground(Color.RED);
         } else {
-            jTextField5.setForeground(Color.white);
+            jTextField5.setForeground(Color.WHITE);
         }
+
+        // Update chart
+        updateChart(summary);
     }
 
-    private void graph() {
+    private void updateChart(SummaryDto summary) {
         jPanel2.removeAll();
         DefaultPieDataset dataset = new DefaultPieDataset();
-        Double incomePercentage = (income / (income + expence)) * 100;
-        Double expencePercentage = (expence / (income + expence)) * 100;
-        dataset.setValue("Income", incomePercentage);
-        dataset.setValue("Expences", expencePercentage);
+
+        double total = summary.getIncome().doubleValue() + summary.getExpence().doubleValue();
+        if (total > 0) {
+            dataset.setValue("Income", summary.getIncomePercentage());
+            dataset.setValue("Expences", summary.getExpencePercentage());
+        } else {
+            dataset.setValue("Income", 0);
+            dataset.setValue("Expences", 0);
+        }
 
         JFreeChart chart1 = ChartFactory.createPieChart("Sale Summary", dataset);
-
         ChartPanel panel = new ChartPanel(chart1);
         panel.setPreferredSize(new Dimension(jPanel2.getWidth(), jPanel2.getHeight()));
 
@@ -109,14 +100,12 @@ public class Summary extends javax.swing.JDialog {
     /**
      * Creates new form Summary
      */
-    public Summary(java.awt.Frame parent, boolean modal) {
+    public Summary(java.awt.Frame parent, boolean modal, SummaryService summaryService) {
         super(parent, modal);
+        this.summaryService = summaryService;
         initComponents();
         month();
-        Income();
-        expences();
-        profit();
-        graph();
+        loadSummaryAsync();
     }
 
     /**
@@ -287,37 +276,42 @@ public class Summary extends javax.swing.JDialog {
     /**
      * @param args the command line arguments
      */
-//    public static void main(String args[]) {
-//        /* Set the Nimbus look and feel */
-//        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-//        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-//         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-//         */
-//        try {
-//            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-//                if ("Nimbus".equals(info.getName())) {
-//                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-//                    break;
-//                }
-//            }
-//        } catch (ClassNotFoundException ex) {
-//            java.util.logging.Logger.getLogger(Summary.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-//        } catch (InstantiationException ex) {
-//            java.util.logging.Logger.getLogger(Summary.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-//        } catch (IllegalAccessException ex) {
-//            java.util.logging.Logger.getLogger(Summary.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-//        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-//            java.util.logging.Logger.getLogger(Summary.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-//        }
-//        //</editor-fold>
-//
-//        /* Create and display the form */
-//        java.awt.EventQueue.invokeLater(new Runnable() {
-//            public void run() {
-//                new Summary().setVisible(true);
-//            }
-//        });
-//    }
+    public static void main(String args[]) {
+        /* Set the Nimbus look and feel */
+        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
+        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
+         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html
+         */
+        try {
+            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
+                if ("Nimbus".equals(info.getName())) {
+                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
+                    break;
+                }
+            }
+        } catch (ClassNotFoundException ex) {
+            java.util.logging.Logger.getLogger(Summary.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (InstantiationException ex) {
+            java.util.logging.Logger.getLogger(Summary.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (IllegalAccessException ex) {
+            java.util.logging.Logger.getLogger(Summary.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
+            java.util.logging.Logger.getLogger(Summary.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+        }
+        //</editor-fold>
+
+        /* Create and display the form */
+        java.awt.EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                // Create service with repositories
+                repository.InvoiceRepository invoiceRepo = new repository.InvoiceRepositoryImpl();
+                repository.GrnRepository grnRepo = new repository.GrnRepositoryImpl();
+                service.SummaryService summaryService = new service.SummaryServiceImpl(invoiceRepo, grnRepo);
+
+                new Summary(null, false, summaryService).setVisible(true);
+            }
+        });
+    }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JLabel jLabel1;
