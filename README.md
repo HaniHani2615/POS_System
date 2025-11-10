@@ -104,7 +104,7 @@ Co So Du Lieu (MySQL)
 
 ---
 
-## Lo Troinh Phat Trien
+## Lo Trinh Phat Trien
 
 - V1 (Hien Tai): Kien truc phan tang, kiem thu don vi, CI co ban
 - V2: Toi uu hoa hieu nang, pooling ket noi
