@@ -1,10 +1,17 @@
 package gui;
 
 import com.formdev.flatlaf.FlatDarculaLaf;
+import dto.InvoiceDto;
+import dto.InvoiceItemDto;
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Vector;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JFrame;
@@ -18,6 +25,13 @@ import net.sf.jasperreports.engine.JasperFillManager;
 import net.sf.jasperreports.engine.JasperPrint;
 import net.sf.jasperreports.engine.data.JRTableModelDataSource;
 import net.sf.jasperreports.view.JasperViewer;
+import repository.CustomerRepositoryImpl;
+import repository.InvoiceItemRepositoryImpl;
+import repository.InvoiceRepositoryImpl;
+import repository.PaymentMethodRepositoryImpl;
+import repository.StockRepositoryImpl;
+import service.InvoiceService;
+import service.InvoiceServiceImpl;
 
 /**
  *
@@ -27,6 +41,7 @@ public class Invoice extends javax.swing.JFrame {
 
     HashMap<String, InvoiceItem> invoiceItemMap = new HashMap<>();
     HashMap<String, String> paymentMethodMap = new HashMap<>();
+    private final InvoiceService invoiceService;
 
     /**
      * Creates new form Invoice
@@ -36,6 +51,16 @@ public class Invoice extends javax.swing.JFrame {
         this.setExtendedState(JFrame.MAXIMIZED_BOTH);
         generateInvoiceNumber();
         jLabel2.setText(SignIn.getEmployeeMobile());
+        
+        // Initialize service layer
+        this.invoiceService = new InvoiceServiceImpl(
+            new InvoiceRepositoryImpl(),
+            new InvoiceItemRepositoryImpl(),
+            new StockRepositoryImpl(),
+            new CustomerRepositoryImpl(),
+            new PaymentMethodRepositoryImpl()
+        );
+        
         loadPaymentMethods();
         timeSetter();
     }
@@ -99,22 +124,18 @@ public class Invoice extends javax.swing.JFrame {
     }
 
     private void loadPaymentMethods() {
-
         try {
-            ResultSet resultSet = MySQL.execute("SELECT * FROM `payment_method`");
-
-            Vector<String> vector = new Vector<>();
-
-            while (resultSet.next()) {
-                vector.add(resultSet.getString("name"));
-                this.paymentMethodMap.put(resultSet.getString("name"), resultSet.getString("id"));
-            }
+            Map<String, String> methods = invoiceService.getPaymentMethods();
+            paymentMethodMap.putAll(methods);
+            
+            Vector<String> vector = new Vector<>(methods.keySet());
             DefaultComboBoxModel model = new DefaultComboBoxModel(vector);
             jComboBox1.setModel(model);
         } catch (Exception e) {
             e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error loading payment methods: " + e.getMessage(), 
+                                        "Error", JOptionPane.ERROR_MESSAGE);
         }
-
     }
 
     private void loadInvoiceItems() {
@@ -765,49 +786,49 @@ public class Invoice extends javax.swing.JFrame {
             String id = jTextField1.getText();
             String customerMobile = jTextField2.getText();
             String employeeMobile = jLabel2.getText();
-            String dateTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-            String paidAmount = jFormattedTextField2.getText();
+            LocalDateTime dateTime = LocalDateTime.now();
+            BigDecimal paidAmount = new BigDecimal(jFormattedTextField2.getText());
             String paymentMethodId = paymentMethodMap.get(String.valueOf(jComboBox1.getSelectedItem()));
-            String discountCount = String.valueOf(discount);
+            BigDecimal discountAmount = BigDecimal.valueOf(discount);
+            BigDecimal balanceAmount = BigDecimal.valueOf(balance);
 
-            MySQL.execute("INSERT INTO `invoice` VALUES('" + id + "','" + customerMobile + "',"
-                    + "'" + employeeMobile + "','" + dateTime + "','" + paidAmount + "','" + discountCount + "','" + paymentMethodId + "')");
-
+            // Convert InvoiceItem map to DTO list
+            List<InvoiceItemDto> items = new ArrayList<>();
             for (InvoiceItem item : invoiceItemMap.values()) {
-                MySQL.execute("INSERT INTO `invoice_item`(`stock_id`,`qty`,`invoice_id`) "
-                        + "VALUES('" + item.getStockId() + "','" + item.getQty() + "','" + id + "')");
-
-                MySQL.execute("UPDATE `stock` SET `qty`=`qty`-'" + item.getQty() + "' WHERE `id`='" + item.getStockId() + "'");
+                InvoiceItemDto itemDto = new InvoiceItemDto();
+                itemDto.setStockId(item.getStockId());
+                itemDto.setBrand(item.getBrand());
+                itemDto.setProductName(item.getName());
+                itemDto.setQty(item.getQty());
+                itemDto.setSellingPrice(new BigDecimal(item.getSellingPrice()));
+                items.add(itemDto);
             }
 
-            double points = Double.parseDouble(jLabel19.getText()) / 100;
-            if (withdrawPoints) {
-                newPoints += points;
-                MySQL.execute("UPDATE `customer` SET `points`='" + newPoints + "' WHERE `mobile`='" + customerMobile + "'");
-            } else {
-                MySQL.execute("UPDATE `customer` SET `points`=`points`+'" + points + "' WHERE `mobile`='" + customerMobile + "'");
-            }
+            // Create Invoice DTO
+            InvoiceDto invoiceDto = new InvoiceDto();
+            invoiceDto.setId(id);
+            invoiceDto.setCustomerMobile(customerMobile);
+            invoiceDto.setEmployeeMobile(employeeMobile);
+            invoiceDto.setDateTime(dateTime);
+            invoiceDto.setPaidAmount(paidAmount);
+            invoiceDto.setPaymentMethodId(paymentMethodId);
+            invoiceDto.setDiscount(discountAmount);
+            invoiceDto.setBalance(balanceAmount);
+            invoiceDto.setWithdrawPoints(withdrawPoints);
+            invoiceDto.setNewPoints(newPoints);
+            invoiceDto.setItems(items);
 
-//            String path = "src//reports//shop.jasper";
-//            HashMap<String,Object> parameters = new HashMap<>();
-//            parameters.put("Parameter1", jLabel19.getText());
-//            parameters.put("Parameter2", jFormattedTextField3.getText());
-//            parameters.put("Parameter3", jComboBox1.getSelectedItem());
-//            parameters.put("Parameter4", jFormattedTextField2.getText());
-//            parameters.put("Parameter5", jLabel23.getText());
-//            
-//            parameters.put("Parameter6", jTextField1.getText());
-//            parameters.put("Parameter7", jLabel16.getText());
-//            parameters.put("Parameter8", jLabel2.getText());
-//            parameters.put("Parameter9", dateTime);
-//            
-//            JRTableModelDataSource dataSource = new JRTableModelDataSource(jTable1.getModel());
-//            JasperPrint jasperPrint= JasperFillManager.fillReport(path, parameters, dataSource);
-//            JasperViewer.viewReport(jasperPrint,true);
+            // Save through service layer
+            invoiceService.saveInvoice(invoiceDto);
+
+            // Reset UI
             reset();
+            
+            JOptionPane.showMessageDialog(this, "Invoice saved successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
             
         } catch (Exception e) {
             e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error saving invoice: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_jButton5ActionPerformed
 

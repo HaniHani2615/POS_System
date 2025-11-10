@@ -10,12 +10,18 @@ import java.text.SimpleDateFormat;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
+import repository.GrnRepositoryImpl;
+import repository.InvoiceRepositoryImpl;
+import service.SummaryService;
+import service.SummaryServiceImpl;
 
 /**
  *
  * @author sande
  */
 public class Home extends javax.swing.JFrame {
+    
+    private final SummaryService summaryService;
 
     private void timeSetter() {
 
@@ -44,6 +50,13 @@ public class Home extends javax.swing.JFrame {
         initComponents();
         this.setExtendedState(JFrame.MAXIMIZED_BOTH);
         jLabel2.setText(name);
+        
+        // Initialize service layer
+        this.summaryService = new SummaryServiceImpl(
+            new InvoiceRepositoryImpl(),
+            new GrnRepositoryImpl()
+        );
+        
         timeSetter();
         
         Icon i = jLabel1.getIcon();
@@ -371,7 +384,7 @@ public class Home extends javax.swing.JFrame {
 
     private void jButton11ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton11ActionPerformed
         // TODO add your handling code here:
-        Summary su = new Summary(this, true);
+        Summary su = new Summary(this, true, summaryService);
         su.setVisible(true);
     }//GEN-LAST:event_jButton11ActionPerformed
 

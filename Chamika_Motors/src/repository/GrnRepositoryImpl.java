@@ -18,6 +18,29 @@ public class GrnRepositoryImpl implements GrnRepository {
     private static final Logger logger = Logger.getLogger(GrnRepositoryImpl.class.getName());
 
     @Override
+    public void createGrn(String id, String supplierId, String employeeMobile, 
+                         LocalDateTime dateTime, BigDecimal paidAmount) throws Exception {
+        String sql = "INSERT INTO grn (id, supplier_id, employee_mobile, date_time, paid_amount) VALUES (?, ?, ?, ?, ?)";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setString(1, id);
+            ps.setString(2, supplierId);
+            ps.setString(3, employeeMobile);
+            ps.setTimestamp(4, Timestamp.valueOf(dateTime));
+            ps.setBigDecimal(5, paidAmount);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Error creating GRN: " + id, e);
+            throw new Exception("Failed to create GRN", e);
+        } finally {
+            DBUtil.closeQuietly(null, ps, conn);
+        }
+    }
+
+    @Override
     public double sumPaidByMonth(String yyyyMM) throws Exception {
         String sql = "SELECT SUM(paid_amount) AS total FROM grn WHERE date_time LIKE ?";
         Connection conn = null;

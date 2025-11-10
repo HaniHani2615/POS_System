@@ -5,11 +5,18 @@
 package gui;
 
 import com.formdev.flatlaf.FlatDarculaLaf;
+import dto.GrnDto;
+import dto.GrnItemDto;
 import java.awt.Color;
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Vector;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -17,6 +24,11 @@ import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
 import model.GRNItem;
 import model.MySQL;
+import repository.GrnItemRepositoryImpl;
+import repository.GrnRepositoryImpl;
+import repository.StockRepositoryImpl;
+import service.GrnService;
+import service.GrnServiceImpl;
 
 /**
  *
@@ -25,6 +37,7 @@ import model.MySQL;
 public class GRN extends javax.swing.JFrame {
 
     HashMap<String, GRNItem> grnItemMap = new HashMap<>();
+    private final GrnService grnService;
 
     /**
      * Creates new form GRN
@@ -33,6 +46,13 @@ public class GRN extends javax.swing.JFrame {
         initComponents();
         jLabel2.setText(SignIn.getEmployeeMobile());
         generateGRNNumber();
+        
+        // Initialize service layer
+        this.grnService = new GrnServiceImpl(
+            new GrnRepositoryImpl(),
+            new GrnItemRepositoryImpl(),
+            new StockRepositoryImpl()
+        );
     }
 
     public JTextField getjTextField2() {
@@ -568,51 +588,37 @@ public class GRN extends javax.swing.JFrame {
         Date exp = jDateChooser2.getDate();
 
         try {
+            LocalDateTime dateTime = LocalDateTime.now();
+            BigDecimal paidAmount = new BigDecimal(jFormattedTextField1.getText());
 
-            String dateTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
-            String paidAmount = jFormattedTextField1.getText();
-
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-
-            MySQL.execute("INSERT INTO `grn` VALUES('" + grnId + "','" + supplierId + "','" + employee + "','" + dateTime + "','" + paidAmount + "')");
-
+            // Convert GRNItem map to DTO list
+            List<GrnItemDto> items = new ArrayList<>();
             for (GRNItem grnItem : grnItemMap.values()) {
-
-                ResultSet resultSet = MySQL.execute("SELECT * FROM `stock` WHERE `product_id`='" + grnItem.getProductId() + "' "
-                        + "AND `selling_price`='" + grnItem.getSellingPrice() + "' AND "
-                        + "`mfg`='" + sdf.format(grnItem.getMfg()) + "' AND "
-                        + "`exp`='" + sdf.format(grnItem.getExp()) + "'");
-
-                String sid = "0";
-
-                if (resultSet.next()) {
-
-                    sid = resultSet.getString("id");
-
-                    String currentQty = resultSet.getString("qty");
-                    String updateQty = String.valueOf(Double.parseDouble(currentQty) + grnItem.getQty());
-                    MySQL.execute("UPDATE `stock` SET `qty`='" + updateQty + "' wHERE `id`='" + sid + "'");
-
-                } else {
-
-                    MySQL.execute("INSERT INTO `stock`(`product_id`,`qty`,`selling_price`,`mfg`,`exp`) "
-                            + "VALUES('" + grnItem.getProductId() + "','" + grnItem.getQty() + "','" + grnItem.getSellingPrice() + "',"
-                            + "'" + sdf.format(grnItem.getMfg()) + "','" + sdf.format(grnItem.getExp()) + "')");
-
-                    ResultSet resultSet2 = MySQL.execute("SELECT * FROM `stock` WHERE `product_id`='" + grnItem.getProductId() + "' "
-                            + "AND `selling_price`='" + grnItem.getSellingPrice() + "' AND "
-                            + "`mfg`='" + sdf.format(grnItem.getMfg()) + "' AND "
-                            + "`exp`='" + sdf.format(grnItem.getExp()) + "'");
-
-                    if (resultSet2.next()) {
-                        sid = resultSet2.getString("id");
-                    }
-                }
-
-                MySQL.execute("INSERT INTO `grn_item`(`stock_id`,`qty`,`buying_price`,`grn_id`) "
-                        + "VALUES('" + sid + "','" + grnItem.getQty() + "','" + grnItem.getBuyingPrice() + "','" + grnId + "')");
-
+                GrnItemDto itemDto = new GrnItemDto();
+                itemDto.setProductId(grnItem.getProductId());
+                itemDto.setBrandName(grnItem.getBrandName());
+                itemDto.setProductName(grnItem.getProductName());
+                itemDto.setQty(grnItem.getQty());
+                itemDto.setBuyingPrice(BigDecimal.valueOf(grnItem.getBuyingPrice()));
+                itemDto.setSellingPrice(BigDecimal.valueOf(grnItem.getSellingPrice()));
+                itemDto.setMfg(grnItem.getMfg().toInstant().atZone(ZoneId.systemDefault()).toLocalDate());
+                itemDto.setExp(grnItem.getExp().toInstant().atZone(ZoneId.systemDefault()).toLocalDate());
+                items.add(itemDto);
             }
+
+            // Create GRN DTO
+            GrnDto grnDto = new GrnDto();
+            grnDto.setId(grnId);
+            grnDto.setSupplierId(supplierId);
+            grnDto.setEmployeeMobile(employee);
+            grnDto.setDateTime(dateTime);
+            grnDto.setPaidAmount(paidAmount);
+            grnDto.setItems(items);
+
+            // Save through service layer
+            grnService.saveGrn(grnDto);
+
+            // Reset UI
             reset();
             DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
             model.setRowCount(0);
@@ -625,8 +631,11 @@ public class GRN extends javax.swing.JFrame {
             jButton5.setEnabled(false);
             grnItemMap.clear();
 
+            JOptionPane.showMessageDialog(this, "GRN saved successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+
         } catch (Exception e) {
             e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error saving GRN: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }//GEN-LAST:event_jButton5ActionPerformed
 

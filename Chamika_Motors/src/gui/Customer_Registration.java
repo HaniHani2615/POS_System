@@ -5,12 +5,17 @@
 package gui;
 
 import com.formdev.flatlaf.FlatDarculaLaf;
+import dto.CustomerDto;
 import java.sql.ResultSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Vector;
 import javax.swing.JOptionPane;
 import javax.swing.table.DefaultTableModel;
 import model.MySQL;
+import repository.CustomerRepositoryImpl;
+import service.CustomerService;
+import service.CustomerServiceImpl;
 
 /**
  *
@@ -18,11 +23,17 @@ import model.MySQL;
  */
 public class Customer_Registration extends javax.swing.JFrame {
 
+    private final CustomerService customerService;
+
     /**
      * Creates new form Company_Registration
      */
     public Customer_Registration() {
         initComponents();
+        
+        // Initialize service layer
+        this.customerService = new CustomerServiceImpl(new CustomerRepositoryImpl());
+        
         loadCustomers();
     }
     
@@ -33,29 +44,27 @@ public class Customer_Registration extends javax.swing.JFrame {
     }
     
     private void loadCustomers() {
-
         try {
             String search = jTextField3.getText();
             
-            ResultSet resultSet = MySQL.execute("SELECT * FROM `customer` WHERE `name` LIKE '"+search+"%' ORDER BY `name` ASC");
+            List<CustomerDto> customers = customerService.searchCustomers(search);
 
             DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
             model.setRowCount(0);
 
-            while (resultSet.next()) {
-
+            for (CustomerDto customer : customers) {
                 Vector<String> vector = new Vector<>();
-                vector.add(resultSet.getString("mobile"));
-                vector.add(resultSet.getString("name"));
-                vector.add(resultSet.getString("points"));
-
+                vector.add(customer.getMobile());
+                vector.add(customer.getName());
+                vector.add(String.valueOf(customer.getPoints()));
                 model.addRow(vector);
             }
 
         } catch (Exception e) {
             e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error loading customers: " + e.getMessage(), 
+                                        "Error", JOptionPane.ERROR_MESSAGE);
         }
-
     }
     
     private void reset() {
@@ -288,27 +297,16 @@ public class Customer_Registration extends javax.swing.JFrame {
         } else if (name.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please enter first name", "Warning", JOptionPane.WARNING_MESSAGE);
         } else {
-
             try {
-                ResultSet resultSet = MySQL.execute("SELECT * FROM `customer` WHERE "
-                        + "`mobile`='" + mobile + "'");
-
-                if (resultSet.next()) {
-                    JOptionPane.showMessageDialog(this, "Customer already registered", "Warning", JOptionPane.WARNING_MESSAGE);
-                } else {
-
-                    MySQL.execute("INSERT INTO `customer`(`mobile`,`name`,`points`) "
-                            + "VALUES('" + mobile + "','" + name + "','0')");
-
-                    reset();
-                    loadCustomers();
-
-                }
-
+                customerService.registerCustomer(mobile, name);
+                reset();
+                loadCustomers();
+                JOptionPane.showMessageDialog(this, "Customer registered successfully!", 
+                                            "Success", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception e) {
                 e.printStackTrace();
+                JOptionPane.showMessageDialog(this, e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
-
         }
     }//GEN-LAST:event_jButton1ActionPerformed
 
@@ -320,19 +318,17 @@ public class Customer_Registration extends javax.swing.JFrame {
         if (name.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please enter name", "Warning", JOptionPane.WARNING_MESSAGE);
         } else {
-
             try {
-
-                    MySQL.execute("UPDATE `customer` SET `name`='" + name + "' "
-                            + "WHERE `mobile`='" + mobile + "'");
-
-                    reset();
-                    loadCustomers();
-
+                customerService.updateCustomer(mobile, name);
+                reset();
+                loadCustomers();
+                JOptionPane.showMessageDialog(this, "Customer updated successfully!", 
+                                            "Success", JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception e) {
                 e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Error updating customer: " + e.getMessage(), 
+                                            "Error", JOptionPane.ERROR_MESSAGE);
             }
-
         }
     }//GEN-LAST:event_jButton2ActionPerformed
 

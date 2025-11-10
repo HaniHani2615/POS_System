@@ -18,6 +18,33 @@ public class InvoiceRepositoryImpl implements InvoiceRepository {
     private static final Logger logger = Logger.getLogger(InvoiceRepositoryImpl.class.getName());
 
     @Override
+    public void createInvoice(String id, String customerMobile, BigDecimal discount, 
+                             BigDecimal paidAmount, String paymentMethodId, BigDecimal balance,
+                             LocalDateTime dateTime) throws Exception {
+        String sql = "INSERT INTO invoice (id, customer_mobile, discount, paid_amount, payment_method_id, balance, date_time) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        Connection conn = null;
+        PreparedStatement ps = null;
+        try {
+            conn = DBUtil.getConnection();
+            ps = conn.prepareStatement(sql);
+            ps.setString(1, id);
+            ps.setString(2, customerMobile);
+            ps.setBigDecimal(3, discount);
+            ps.setBigDecimal(4, paidAmount);
+            ps.setString(5, paymentMethodId);
+            ps.setBigDecimal(6, balance);
+            ps.setTimestamp(7, Timestamp.valueOf(dateTime));
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Error creating invoice: " + id, e);
+            throw new Exception("Failed to create invoice", e);
+        } finally {
+            DBUtil.closeQuietly(null, ps, conn);
+        }
+    }
+
+    @Override
     public int countByMonth(String yyyyMM) throws Exception {
         String sql = "SELECT COUNT(*) AS cnt FROM invoice WHERE date_time LIKE ?";
         Connection conn = null;
